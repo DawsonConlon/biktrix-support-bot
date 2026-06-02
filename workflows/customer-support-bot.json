@@ -1,0 +1,265 @@
+{
+  "name": "Biktrix - Customer Support Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "biktrix-support",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "w1",
+      "name": "Customer Question Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        304
+      ],
+      "webhookId": "biktrix-support"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst b = $json.body || {};\nconst query = $json.query || {};\nconst q = query.question || query.q || b.question || b.chatInput || b.query || b.message || $json.question || '';\nreturn [{ json: { question: String(q).trim() } }];\n"
+      },
+      "id": "w2",
+      "name": "Parse Question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'text-embedding-3-small', input: $json.question }) }}",
+        "options": {}
+      },
+      "id": "w3",
+      "name": "Embed Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qaKpkBgUXxzNV4dk",
+          "name": "OpenAI - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdcee3b0-5d83-441e-943a-3f14994d8a40.us-east-1-1.aws.cloud.qdrant.io/collections/biktrix_kb/points/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vector: $json.data[0].embedding, limit: 8, score_threshold: 0.35, with_payload: true }) }}",
+        "options": {}
+      },
+      "id": "w4",
+      "name": "Search Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0H3kxYaVlt7bFRjX",
+          "name": "Qdrant Header - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst hits = $json.result || [];\nconst question = $('Parse Question').first().json.question;\nconst context = hits.map((h,i)=>`[Doc ${i+1}] ${h.payload.guideTitle} \u2014 ${h.payload.stepTitle}\\n${h.payload.text}\\nURL: ${h.payload.url}`).join('\\n\\n---\\n\\n');\nconst sys = `You are the Biktrix eBike customer support assistant. Answer ONLY using the provided help-center documents.\nRules:\n- If the documents do not contain the answer, reply exactly: \"I don't have information on that in our help center. Please contact our support team.\" and do NOT add any URL.\n- Otherwise be friendly and concise for non-technical customers.\n- When you do answer, end with: \"For more details visit: <the single most relevant article URL from the docs>\"`;\nconst user = `Customer question: ${question}\\n\\nHelp-center documents:\\n${context}`;\nreturn [{ json: { body: { model:'gpt-4o-mini', temperature:0.2, messages:[{role:'system',content:sys},{role:'user',content:user}] } } }];\n"
+      },
+      "id": "w5",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "w6",
+      "name": "Generate Answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1104,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qaKpkBgUXxzNV4dk",
+          "name": "OpenAI - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst answer = $json.choices?.[0]?.message?.content || 'Sorry, something went wrong on our end. Please contact our support team.';\nreturn [{ json: { answer, success: true } }];\n"
+      },
+      "id": "w7",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ answer: $json.answer, success: $json.success }) }}",
+        "options": {}
+      },
+      "id": "w8",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "path": "biktrix-support",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "w1b",
+      "name": "Question Webhook (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        528
+      ],
+      "webhookId": "biktrix-support"
+    }
+  ],
+  "connections": {
+    "Customer Question Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Question": {
+      "main": [
+        [
+          {
+            "node": "Embed Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Question": {
+      "main": [
+        [
+          {
+            "node": "Search Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Answer": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Webhook (GET)": {
+      "main": [
+        [
+          {
+            "node": "Parse Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

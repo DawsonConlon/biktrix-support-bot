@@ -1,0 +1,245 @@
+{
+  "name": "Biktrix - Knowledge Base Ingestion working",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "n1",
+      "name": "Start Ingestion",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://biktrix.stonly.com/kb/en",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "n2",
+      "name": "Get Help Center Homepage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst html = $input.first().json.data;\nconst match = html.match(/window\\.__SERVER_APP_STATE__\\s*=\\s*(.+?)(?=<\\/script>)/s);\nif (!match) throw new Error('Could not find __SERVER_APP_STATE__ in homepage HTML');\nlet raw = match[1].trim().replace(/;\\s*$/, '').replace(/\\bundefined\\b/g, 'null');\nlet data;\ntry { data = JSON.parse(raw); } catch(e) { throw new Error('Parse failed: ' + e.message); }\nconst guides = data?.initialData?.helpcenterData?.guides || [];\nif (guides.length === 0) throw new Error('No guides found');\nreturn guides.map(g => {\n  const gid = g.guideId;\n  const title = g?.titles?.en?.title || 'Untitled';\n  const firstStepId = g.firstStepId;\n  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');\n  const url = `https://biktrix.stonly.com/kb/guide/en/${slug}-${gid}/Steps/${firstStepId}`;\n  return { json: { guideId: gid, title, firstStepId, url } };\n});\n"
+      },
+      "id": "n3",
+      "name": "Extract Guide List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 5,
+              "batchInterval": 200
+            }
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "n4",
+      "name": "Fetch Guide Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\nconst guides = $('Extract Guide List').all();\nconst out = [];\nconst cleanHtml = (s) => (s || '')\n  .replace(/<script[\\s\\S]*?<\\/script>/gi,'')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi,'')\n  .replace(/<br\\s*\\/?>/gi,'\\n')\n  .replace(/<\\/p>/gi,'\\n')\n  .replace(/<\\/li>/gi,'\\n')\n  .replace(/<[^>]+>/g,' ')\n  .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')\n  .replace(/&quot;/g,'\"').replace(/&#39;/g,\"'\")\n  .replace(/[ \\t]+/g,' ').replace(/\\n{3,}/g,'\\n\\n').trim();\nfor (let i = 0; i < items.length; i++) {\n  const html = items[i].json.data;\n  const guide = guides[i] ? guides[i].json : {};\n  if (!html) continue;\n  const m = html.match(/window\\.__SERVER_APP_STATE__\\s*=\\s*(.+?)(?=<\\/script>)/s);\n  if (!m) continue;\n  let raw = m[1].trim().replace(/;\\s*$/,'').replace(/\\bundefined\\b/g,'null');\n  let data;\n  try { data = JSON.parse(raw); } catch(e){ continue; }\n  const steps = data?.initialData?.loadedGuide?.steps || [];\n  for (const step of steps) {\n    for (const mod of (step.stepModule || [])) {\n      if (mod.type !== 'CONTENT') continue;\n      const c = mod?.content?.en || {};\n      const st = c.title || '';\n      const body = cleanHtml(c.content || '');\n      if (!st && !body) continue;\n      const text = (st && body) ? `${st}\\n\\n${body}` : (st || body);\n      if (text.length < 15) continue;\n      out.push({ json: { text, url: guide.url, guideTitle: guide.title, guideId: String(guide.guideId), stepId: String(step.stepId), stepTitle: st }, pairedItem: { item: i } });\n    }\n  }\n}\nreturn out;\n"
+      },
+      "id": "n5",
+      "name": "Extract and Chunk Steps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'text-embedding-3-small', input: $json.text }) }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 20,
+              "batchInterval": 100
+            }
+          }
+        }
+      },
+      "id": "n6",
+      "name": "OpenAI Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1104,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qaKpkBgUXxzNV4dk",
+          "name": "OpenAI - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst emb = $json.data[0].embedding;\nconst c = $('Extract and Chunk Steps').item.json;\nfunction hashUUID(str){\n  let h1=0x811c9dc5,h2=0x811c9dc5;\n  for(let i=0;i<str.length;i++){const ch=str.charCodeAt(i); h1=Math.imul(h1^ch,16777619)>>>0; h2=Math.imul(h2^(ch+13),16777619)>>>0;}\n  const hex=(h1.toString(16).padStart(8,'0')+h2.toString(16).padStart(8,'0')).padEnd(32,'0').slice(0,32);\n  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;\n}\nconst id = hashUUID(`${c.guideId}-${c.stepId}-${(c.text||'').length}`);\nreturn { json: { body: { points: [ { id, vector: emb, payload: { text:c.text, url:c.url, guideTitle:c.guideTitle, guideId:c.guideId, stepId:c.stepId, stepTitle:c.stepTitle } } ] } } };\n"
+      },
+      "id": "n7",
+      "name": "Build Qdrant Point",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "https://cdcee3b0-5d83-441e-943a-3f14994d8a40.us-east-1-1.aws.cloud.qdrant.io/collections/biktrix_kb/points?wait=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "n8",
+      "name": "Upsert to Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0H3kxYaVlt7bFRjX",
+          "name": "Qdrant Header - Biktrix"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Start Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Get Help Center Homepage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Help Center Homepage": {
+      "main": [
+        [
+          {
+            "node": "Extract Guide List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Guide List": {
+      "main": [
+        [
+          {
+            "node": "Fetch Guide Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Guide Page": {
+      "main": [
+        [
+          {
+            "node": "Extract and Chunk Steps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract and Chunk Steps": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Build Qdrant Point",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Qdrant Point": {
+      "main": [
+        [
+          {
+            "node": "Upsert to Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}

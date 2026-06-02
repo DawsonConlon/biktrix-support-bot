@@ -1,0 +1,269 @@
+{
+  "name": "Biktrix CSB Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "\nconst j = $json;\nconst raw = j.text || (j.event && j.event.text) || '';\nif (j.bot_id || (j.event && j.event.bot_id) || j.subtype === 'bot_message') { return []; }\nconst q = String(raw).replace(/<@[^>]+>/g, '').replace(/\\s+/g, ' ').trim();\nif (!q) return [];\nconst ev = j.event || j;\nconst thread_ts = ev.thread_ts || ev.ts || j.thread_ts || j.ts || '';\nconst channel = ev.channel || j.channel || '';\nreturn [{ json: { question: q, thread_ts, channel } }];\n"
+      },
+      "id": "1c90ae0c-6961-4fd5-a105-eb9f4e03a004",
+      "name": "Parse Question",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'text-embedding-3-small', input: $json.question }) }}",
+        "options": {}
+      },
+      "id": "73df6c47-05aa-4115-97f0-9008bbb32a40",
+      "name": "Embed Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qaKpkBgUXxzNV4dk",
+          "name": "OpenAI - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://cdcee3b0-5d83-441e-943a-3f14994d8a40.us-east-1-1.aws.cloud.qdrant.io/collections/biktrix_kb/points/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ vector: $json.data[0].embedding, limit: 8, score_threshold: 0.35, with_payload: true }) }}",
+        "options": {}
+      },
+      "id": "ffa4206e-41f9-4860-bb5f-6046ab65d7b5",
+      "name": "Search Qdrant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        304
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "0H3kxYaVlt7bFRjX",
+          "name": "Qdrant Header - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst hits = $json.result || [];\nconst pq = $('Parse Question').first().json;\nconst question = pq.question;\nconst context = hits.map((h,i)=>`[Doc ${i+1}] ${h.payload.guideTitle} \u2014 ${h.payload.stepTitle}\\n${h.payload.text}\\nURL: ${h.payload.url}`).join('\\n\\n---\\n\\n');\nconst sys = `You are the Biktrix eBike customer support assistant. Answer ONLY using the provided help-center documents.\nRules:\n- If the documents do not contain the answer, reply exactly: \"I don't have information on that in our help center. Please contact our support team.\" and do NOT add any URL.\n- Otherwise be friendly and concise for non-technical customers.\n- When you do answer, end with: \"For more details including videos, visit: <the single most relevant article URL from the docs>\"`;\nconst user = `Customer question: ${question}\\n\\nHelp-center documents:\\n${context}`;\nreturn [{ json: { body: { model:'gpt-4o-mini', temperature:0.2, messages:[{role:'system',content:sys},{role:'user',content:user}] }, thread_ts: pq.thread_ts, channel: pq.channel } }];\n"
+      },
+      "id": "907e9110-8cfb-47b4-9f13-44ca2e86ce6c",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "f8b57cc0-6db3-45f1-aac2-ed4d3ac8a42d",
+      "name": "Generate Answer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1104,
+        304
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "qaKpkBgUXxzNV4dk",
+          "name": "OpenAI - Biktrix"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst answer = $json.choices?.[0]?.message?.content || 'Sorry, something went wrong on our end. Please contact our support team.';\nconst bp = $('Build Prompt').first().json;\nreturn [{ json: { answer, success: true, thread_ts: bp.thread_ts, channel: bp.channel } }];\n"
+      },
+      "id": "c6d596f0-2c90-4ac1-a8f7-24b03dc1d848",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "trigger": [
+          "app_mention"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6E6PE4HJ",
+          "mode": "list",
+          "cachedResultName": "rag-assistant"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        304
+      ],
+      "id": "b5c4e7e2-09d8-433f-b75d-f4ae73370b23",
+      "name": "Slack Trigger",
+      "webhookId": "8d2c0c70-c795-49ad-9d06-eda23035184a",
+      "credentials": {
+        "slackApi": {
+          "id": "DHkO8riNH3PeJhCb",
+          "name": "Slack account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6E6PE4HJ",
+          "mode": "list",
+          "cachedResultName": "rag-assistant"
+        },
+        "text": "={{ $json.answer }}",
+        "otherOptions": {
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1552,
+        304
+      ],
+      "id": "14e24b30-a0a1-472f-ad8d-f9c9495444e7",
+      "name": "Send a message",
+      "webhookId": "3fe9f51e-dbf6-4075-a8d1-3ceedd360582",
+      "credentials": {
+        "slackApi": {
+          "id": "DHkO8riNH3PeJhCb",
+          "name": "Slack account 3"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Parse Question": {
+      "main": [
+        [
+          {
+            "node": "Embed Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed Question": {
+      "main": [
+        [
+          {
+            "node": "Search Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Generate Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Answer": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
