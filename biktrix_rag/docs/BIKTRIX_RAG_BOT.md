@@ -193,6 +193,44 @@ refusal text + add the support contact info to the system prompt in the **Build 
 
 ---
 
+## Iteration 5 — Model Guide Requests (2026-07-16)
+
+**Feature:** a customer can ask "give me all the guides for my RogueHawk" and get a complete,
+deterministic list of help articles for that model — the universal onboarding guides (assembly,
+first ride, batteries, display, maintenance, registration) plus every guide specific to that
+model family.
+
+**Why not query the vector DB for this:** Qdrant points carry no model field, guide titles don't
+reliably contain the model name (the flagship assembly guide is model-agnostic and branches by
+series *inside* the guide), and top-k semantic search can't guarantee a *complete* list. So the
+feature uses a **curated model registry** in the Build Prompt node instead.
+
+**How it works (all inside the Build Prompt node — `ai_prompts/prompt_i5.js`):**
+- A JS registry holds `UNIVERSAL` guides + `MODEL_GUIDES` per family (Swift, Stunner, Juggernaut,
+  Kutty, Monte Capro, RogueHawk, BTX Moto, SkyTrike, Challenger). All URLs pulled verbatim from
+  the live guide list.
+- Detection is done **in code, not by the LLM**: question must contain a guide-ish word
+  (guide/article/manual/resource/docs/tutorial) AND a model alias (normalized, so "rogue hawk fs"
+  matches RogueHawk). When detected, the complete answer is pre-built in JS and gpt-4o-mini is
+  instructed to relay it verbatim — guaranteeing complete lists and zero hallucinated URLs.
+  (An earlier attempt that put the table in the system prompt and let the LLM copy it truncated
+  lists on variant questions — that's why detection/formatting moved to code.)
+- Everything else (general Q&A, greetings, showrooms, refusals) flows through the unchanged
+  semantic path. "My RogueHawk battery won't charge" is NOT a guide request (no guide word) and
+  answers normally. Unknown models get a polite refusal + the family list + contact link.
+
+**Deployment (safe iteration):** v1 (`fCbwuOF6HoRA6Qyx`, `/webhook/biktrix-support`) is untouched
+and still live. v2 is a separate workflow — **Biktrix - Customer Support Bot v2**
+(ID `Gve931zbtQzgDQpk`), webhook `POST/GET https://n8n.biktrix.com/webhook/biktrix-support-v2`,
+export in `workflows/customer-support-bot-v2.json`. Test UI: `chat-ui/biktrix_chat_animated_p5.html`.
+Note: when creating workflows via the n8n REST API, webhook nodes need a `webhookId` field or the
+webhook won't register on activation.
+
+**Maintenance:** to add/remove guides or models, edit the `UNIVERSAL` / `MODEL_GUIDES` /
+`MODEL_ALIASES` objects at the top of the Build Prompt node (or `prompt_i5.js` and re-push).
+
+---
+
 ## Environment
 
 | Item | Value |

@@ -6,6 +6,8 @@ accurate answers **plus a direct link to the source help article**.
 
 > **Status:** ✅ Live & working. Knowledge base ingested (1,694 chunks), and three delivery
 > channels are running: a webhook API, a browser chat page, and a Slack bot.
+> **Latest (2026-07-16):** model-specific guide lookup — customers can get every guide for
+> their exact bike model with one click (see below).
 
 ---
 
@@ -52,6 +54,31 @@ See each folder's own `README.md` for details and version notes.
 | `slack-bot.json` | Slack: `@RAG-Assistant <question>` → threaded reply in the channel |
 
 These are reference exports. Credentials are referenced by ID only (no secrets in this repo).
+
+---
+
+## Model-specific guides (iteration 5 + 6)
+
+**Problem:** customers wanted to access the guides for their specific bike model seamlessly —
+"give me everything for my RogueHawk" — but the bot's top-k semantic search can't guarantee a
+*complete* list, and the vector DB has no model metadata (most help articles are model-agnostic).
+
+**Solution (two parts):**
+
+1. **Backend (v2 bot, `workflows/customer-support-bot-v2.json` + `ai_prompts/prompt_i5.js`):**
+   a curated model registry lives inside the Build Prompt node — 7 universal onboarding guides
+   (assembly, first ride, batteries, display, maintenance, registration) plus every
+   model-specific guide for each family (Swift, Stunner, Juggernaut, Kutty, Monte Capro,
+   RogueHawk, BTX Moto, SkyTrike, Challenger). Guide requests are detected **in code** (guide
+   word + fuzzy model name), and the complete answer is pre-built in JS — the LLM only relays
+   it, so lists are always complete and URLs are never invented. All other questions flow
+   through the unchanged semantic pipeline. Deployed as a **separate v2 workflow** on
+   `/webhook/biktrix-support-v2`; the original v1 bot keeps running untouched.
+
+2. **Frontend (`chat-ui/biktrix_chat_animated_p6.html`):** a "Guides for a specific model"
+   button above the chat input reveals a chip for each model — one click sends the request
+   through the normal chat flow. No typing needed; typing and problem-solving still work
+   exactly as before.
 
 ---
 

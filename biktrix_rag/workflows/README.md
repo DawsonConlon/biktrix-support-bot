@@ -8,6 +8,7 @@ instance. Credentials appear as ID references only — no secrets.
 | `knowledge-base-ingestion.json` | Knowledge Base Ingestion | `efHyRPQmGKkZ3NdC` | Manual | Linear HTTP pipeline (no loop). Scrape → chunk → embed → upsert to Qdrant. Re-runnable (deterministic point IDs). |
 | `customer-support-bot.json` | Customer Support Bot | `fCbwuOF6HoRA6Qyx` | Webhook (POST + GET) | Question → embed → search Qdrant (top 8, score ≥ 0.35) → GPT-4o-mini → JSON answer. |
 | `slack-bot.json` | Biktrix CSB Slack | `tOLxcEIsNPQxU14K` | Slack `app_mention` | Same RAG core as the support bot; replies in a Slack thread under the user's message. |
+| `customer-support-bot-v2.json` | Customer Support Bot v2 | `Gve931zbtQzgDQpk` | Webhook (POST + GET, path `biktrix-support-v2`) | Iteration 5: adds model-guide requests ("all guides for my RogueHawk") via a curated registry in the Build Prompt node (`ai_prompts/prompt_i5.js`). Detection + list building happen in code; general Q&A unchanged. v1 stays live in parallel. |
 
 ## Architecture history (why these look the way they do)
 - **v1 (abandoned):** used n8n langchain Qdrant vector-store nodes + a Split-In-Batches loop. Fragile —
