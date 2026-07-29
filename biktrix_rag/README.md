@@ -4,7 +4,7 @@ A Retrieval-Augmented Generation (RAG) customer-support bot for **Biktrix** (an 
 It answers customer questions using content scraped from the Biktrix help center and returns
 accurate answers **plus a direct link to the source help article**.
 
-> **Status:** ✅ Live & working. Knowledge base ingested (1,694 chunks), and three delivery
+> **Status:**  Live & working. Knowledge base ingested (1,694 chunks), and three delivery
 > channels are running: a webhook API, a browser chat page, and a Slack bot.
 > **Latest (2026-07-16):** model-specific guide lookup — customers can get every guide for
 > their exact bike model with one click (see below).
