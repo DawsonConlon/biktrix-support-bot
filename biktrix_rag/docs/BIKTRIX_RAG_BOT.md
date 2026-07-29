@@ -108,7 +108,7 @@ curl -X POST https://n8n.biktrix.com/webhook/biktrix-support \
 ### Which node controls what (cheat-sheet for editing behavior)
 | Node | Controls | Edit it when… |
 |---|---|---|
-| **Build Prompt** (Code) ⭐ | The **system prompt** = personality + rules + refusal message | You want to change tone, add rules, change how it answers |
+| **Build Prompt** (Code)  | The **system prompt** = personality + rules + refusal message | You want to change tone, add rules, change how it answers |
 | **Generate Answer** (HTTP) | The **model** (`gpt-4o-mini`) and **temperature** (0.2) | You want a smarter model or more/less creativity |
 | **Search Qdrant** (HTTP) | **What facts the bot sees** (`limit`, `score_threshold`) | Bot misses answers (raise limit/lower threshold) or answers junk (raise threshold) |
 
@@ -162,7 +162,7 @@ curl -X POST https://n8n.biktrix.com/webhook/biktrix-support \
 
 Core project is complete and live. The active focus areas, in priority order:
 
-### 1. Refine the accuracy of the answers ⭐
+### 1. Refine the accuracy of the answers 
 Make the bot reliably correct across more question types.
 - Done so far: retrieval bumped to limit 8 + score_threshold 0.35.
 - Next levers: better chunking on re-ingest (larger overlapping chunks; some duplicate chunks were
