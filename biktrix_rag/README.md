@@ -22,6 +22,10 @@ That gap is what led me to build the Biktrix Support RAG Bot: instead of searchi
 
 ---
 
+
+<img width="3056" height="2064" alt="image" src="https://github.com/user-attachments/assets/ecde604a-5a02-4476-abd7-53588026b426" />
+
+
 > **Status:**  Live & working. Knowledge base ingested (1,694 chunks), and three delivery
 > channels are running: a webhook API, a browser chat page, and a Slack bot.
 > **Latest (2026-07-16):** model-specific guide lookup — customers can get every guide for
