@@ -1,8 +1,26 @@
 # Biktrix Customer Support RAG Bot
-
+---
 A Retrieval-Augmented Generation (RAG) customer-support bot for **Biktrix** (an eBike company).
 It answers customer questions using content scraped from the Biktrix help center and returns
 accurate answers **plus a direct link to the source help article**.
+---
+
+# Business Problem
+I worked on the CX team at an ebike company, helping customers remotely troubleshoot and repair their bikes across the entire customer base. Our team handled upwards of 470 tickets a week.
+
+One of our key resources was an internal knowledge base hosted on Stonly, containing help articles covering everything from general assembly to brake sensor replacement. When it worked, it worked well but most customers never used it.
+
+The problem: a large share of our ticket volume was for issues our knowledge base already solved — things like "how do I assemble my bike." Customers either didn't know the database existed or found it too intimidating to navigate. So instead of self-serving in two minutes, they called in, and we ran the full support loop just to hand them a link:
+
+Customer calls → we identify the issue → we open a ticket → we send the relevant article → we follow up to confirm resolution
+
+That's five steps and real agent time spent on a problem the customer could have solved themselves, if they'd been able to find the right article. Multiply that across a fraction of 470 tickets/week, and easy, low-value tickets were consistently crowding out capacity needed for customers with serious, safety-relevant issues.
+
+The resource to solve these tickets already existed. The real gap was getting the right article in front of the customer at the moment they needed it — without requiring them to navigate the database themselves.
+
+That gap is what led me to build the Biktrix Support RAG Bot: instead of searching a database, a customer describes their issue in plain language and gets routed directly to the relevant article.
+
+---
 
 > **Status:**  Live & working. Knowledge base ingested (1,694 chunks), and three delivery
 > channels are running: a webhook API, a browser chat page, and a Slack bot.
@@ -92,8 +110,6 @@ curl -X POST https://n8n.biktrix.com/webhook/biktrix-support \
   -H "Content-Type: application/json" \
   -d '{"question": "How do I charge my battery?"}'
 ```
-
-**Slack:** in the `#rag-assistant` channel, post `@RAG-Assistant how do I charge my battery?`
 
 ---
 
