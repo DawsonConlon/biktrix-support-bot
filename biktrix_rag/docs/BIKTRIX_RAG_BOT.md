@@ -20,7 +20,7 @@ Stonly renders full article content server-side inside `window.__SERVER_APP_STAT
 
 ---
 
-## Status: ✅ LIVE & WORKING (both workflows tested end-to-end)
+## Status:  LIVE & WORKING (both workflows tested end-to-end)
 
 ## Tech Stack (final)
 
